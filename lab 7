@@ -1,0 +1,195 @@
+#pragma config FOSC = INTOSC    // Oscillator Selection (INTOSC oscillator: I/O function on CLKIN pin) [cite: 216]
+#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled) [cite: 216]
+#pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled) [cite: 216]
+#pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR) [cite: 216]
+#pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled) [cite: 216]
+#pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled) [cite: 216]
+#pragma config BOREN = OFF      // Brown-out Reset Enable (Brown-out Reset disabled) [cite: 216, 217]
+#pragma config CLKOUTEN = OFF   // Clock Out Enable (CLKOUT function is disabled. I/O or oscillator function on the CLKOUT pin) [cite: 217]
+#pragma config IESO = OFF       // Internal/External Switchover (Internal/External Switchover mode is disabled) [cite: 217]
+#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled) [cite: 217]
+
+// CONFIG2
+#pragma config WRT = OFF        // Flash Memory Self-Write Protection (Write protection off) [cite: 217]
+#pragma config PLLEN = OFF      // PLL Enable (4x PLL disabled) [cite: 217]
+#pragma config STVREN = ON      // Stack Overflow/Underflow Reset Enable (Stack Overflow or Underflow will cause a Reset) [cite: 217]
+#pragma config BORV = LO        // Brown-out Reset Voltage Selection (Brown-out Reset Voltage (Vbor), low trip point selected.) [cite: 217, 218]
+#pragma config LVP = ON         // Low-Voltage Programming Enable (Low-voltage programming enabled) [cite: 218]
+
+#include <xc.h>
+#include <stdio.h>
+#include <stdlib.h>
+
+
+//These are the values to set baud rate for UART and configure some functions [cite: 218]
+#define BAUD 9600 // [cite: 218]
+#define FOSC 4000000L // [cite: 218]
+#define DIVIDER ((int)(FOSC/(16UL * BAUD) -1)) // Should be 25 for9600/4MhZ [cite: 218]
+#define NINE_BITS 0 // [cite: 218]
+#define SPEED 0x4 // [cite: 218]
+#define RX_PIN TRISC5 // [cite: 218]
+#define TX_PIN TRISC4 // [cite: 218]
+#define _XTAL_FREQ 4000000.0 /*for 4mhz*/ // [cite: 218]
+
+//*Function Prototypes*// [cite: 219]
+void RA5Blink(void); // [cite: 219]
+void pinConfig(void); // [cite: 219]
+void setup_comms(void); // [cite: 219]
+void putch(char); // [cite: 219]
+int getch(void); // [cite: 219]
+int getche(void); // [cite: 219]
+
+//*Global Vars*// [cite: 220]
+unsigned int Temp, FVval, Pot, PCF, Photo; // [cite: 220]
+double Ctemp, Tcal, Ftemp; // Added Ftemp for challenge 
+
+void main(void) {
+
+    pinConfig(); // 
+
+    setup_comms(); // set up the USART - settings defined in usart.h 
+    // Set up for the Temp Sensor, Pot  and FVR for PART A
+    //Later will add the PCF9700 Temp Sensor and the Photoresistor for PART B 
+
+    // Set up FVR for challenge: Enable FVR, Enable Temp Sensor, Low Range, ADC/CDA refs = 2.048V [cite: 164, 102, 103, 1657]
+    FVRCON = 0xAA; // 1010 1010 => FVREN=1, FVRRDY=RO, TSEN=1, TSRNG=0, CDAFVR=10 (2.048V), ADFVR=10 (2.048V)
+
+    // Get set up for A2D [cite: 223]
+    ADCON1 = 0xC3; // Right justify, clock=Fosc/4 and Vss and FVR -/+ references [cite: 223]
+
+    while (1)  {
+
+        /* Pot Read  it is on Chanel AN11  Thus the value in the ADCON0 reg = 0x2D */ // [cite: 224]
+        ADCON0 = 0x2D; // set up for the pot input channel AN11 [cite: 224, 126]
+        __delay_ms(10); // Allow cap to recharge [cite: 225] (Using 10ms like others)
+        ADGO = 1; // initiate conversion on the selected channel [cite: 226]
+        while(ADGO)continue; // Wait for conversion [cite: 227]
+        Pot = (unsigned)((ADRESH<<8)+(ADRESL)); //Store 10 bits into Pot, 8 + 2 [cite: 227]
+
+        /* Fixed Voltage Reference Read */ // [cite: 228]
+        ADCON0 = 0x7D; // set up for the FVR input channel = 11111 [cite: 228, 126]
+        __delay_ms(10); // Allow cap to recharge [cite: 229]
+        ADGO = 1; // initiate conversion on the selected channel [cite: 230]
+        while(ADGO)continue; // Wait for conversion [cite: 231]
+        FVval = ((ADRESH<<8)+(ADRESL)); // Store 10 bits into FVval, 8 + 2 [cite: 231]
+
+        /* Internal Temperature Read - Challenge Part 1 */ // [cite: 232, 162]
+        // ****** Code written for the challenge ******** [cite: 123]
+        ADCON0 = 0x75; // set up for the temp input channel = 11101 [cite: 163, 123, 126]
+        __delay_ms(10); // Allow cap to recharge [cite: 233]
+        ADGO = 1; // initiate conversion on the selected channel [cite: 234]
+        while(ADGO)continue; // Wait for conversion [cite: 235]
+        Temp = ((ADRESH<<8)+(ADRESL)); // Store 10 bits into Temp, 8 + 2 [cite: 236, 163]
+
+
+        // Part B Reads (commented out as per starter code)
+        //    /*Photo Resistor Read*/
+        //       ADCON0 = 0x1D; // set up for the Photo input channel = 00111 [cite: 237, 126] (Note: Starter comment says FVR channel)
+        //       __delay_ms(10); //Allow cap to recharge [cite: 237]
+        //       ADGO = 1; // initiate conversion on the selected channel [cite: 238]
+        //       while(ADGO)continue; // Wait for conversion [cite: 239]
+        //       Photo = (unsigned int)((ADRESH<<8)+(ADRESL)); //Store 10 bits into Photo [cite: 240]
+        //
+        //    /*PCF9700 Temperature Read*/
+        //       ADCON0 = 0x19; // set up for the temp input channel = 00110 [cite: 242, 126] (Note: Starter comment says 11101)
+        //       __delay_ms(10); //Allow cap to recharge [cite: 242]
+        //       ADGO = 1; // initiate conversion on the selected channel [cite: 243]
+        //       while(ADGO)continue; // Wait for conversion [cite: 244]
+        //       PCF = (unsigned int)((ADRESH<<8)+(ADRESL)); //Store 10 bits into PCF [cite: 245]
+
+
+        /* LED Control based on Temp vs Pot - Challenge Part 3 [cite: 166, 169] */
+        if (Temp > Pot) { // Compare internal temp raw value with pot raw value 
+            RA5 = 0; // Turn off Green LED 
+            RA2 = 1; // Turn on Red LED 
+        } else {
+            RA5 = 1; // Turn on Green LED 
+            RA2 = 0; // Turn off Red LED 
+        }
+
+        /* Write to Terminal + Temperature Math */ // 
+        // Calculate Ctemp using the formula provided in the starter code 
+        // Note: The guide says this formula is uncalibrated [cite: 124]
+        Ctemp = ((0.659-((1.48)*(1-((float)Temp/1023))))/0.00132)-40; // 
+
+        // Calculate Ftemp - Challenge Part 4 
+        Ftemp = (Ctemp * 9.0 / 5.0) + 32.0; // Standard Celsius to Fahrenheit conversion
+
+        // Print values including Ctemp and Ftemp - Challenge Part 4 modification 
+        printf("IntT %d FixV %d Pot %d C: %.2f F: %.2f\n\r", Temp, FVval, Pot, Ctemp, Ftemp); //  (modified)
+
+        // Part B printf (commented out as per starter code)
+        //printf("PCF %d Photo %d CalT %f \n\r", PCF, Photo, Ctemp); // [cite: 247, 248]
+
+        __delay_ms(1000); // Delay for readability [cite: 248]
+
+        /* Blink RA5 once every transmission packet */ // 
+        // RA5Blink(); // Commented out as per lab guide suggestion due to interference with temp readings [cite: 156, 154, 155]
+    }
+    return;
+}
+
+// Sets up the EUSART communication parameters [cite: 250]
+void setup_comms(void)  {
+    RX_PIN = 1; // Configure RC5 as input (EUSART RX) [cite: 250, 218]
+    TX_PIN = 1; // Configure RC4 as input (used by EUSART TX) [cite: 250, 218] (EUSART module overrides TRIS) [cite: 46]
+    SPBRG = DIVIDER; // Set baud rate generator register [cite: 250, 218]
+    RCSTA = (NINE_BITS | 0x90); // Enable serial port and continuous receive, 8-bit mode [cite: 251, 42, 1508] (0x90 = SPEN | CREN)
+    TXSTA = (SPEED | NINE_BITS | 0x20); // Enable transmit, 8-bit mode, async, high speed [cite: 251, 41, 1815] (0x20 = TXEN) (SPEED is 0x4 -> BRGH=1) [cite: 218]
+    // Note: Individual bit settings below are redundant if registers are set as above
+    TXEN = 1; // Enable transmission [cite: 251, 39]
+    SYNC = 0; // Asynchronous mode [cite: 251, 40]
+    SPEN = 1; // Enable serial port [cite: 252, 40]
+    BRGH = 1; // High speed baud rate [cite: 252]
+}
+
+// Function required by printf to output characters through EUSART [cite: 50]
+void putch(char bVal) {
+    while(!TXIF) /* set when register is empty */ // Wait for transmit buffer to be empty [cite: 252]
+        continue;
+    TXREG = bVal; // Load character into transmit register [cite: 253]
+}
+
+// Function to get a character from EUSART (blocking) [cite: 253]
+int getch() {
+    while(!RCIF) /* set when register is not empty */ // Wait for receive buffer to be full [cite: 253]
+        continue;
+    return RCREG; // Return received character [cite: 254]
+}
+
+// Function to get a character from EUSART and echo it back (blocking) [cite: 254]
+int getche(void) {
+    unsigned char c;
+    putch(c = getch()); // Get char and then send it back [cite: 255]
+    return c;
+}
+
+// Configures oscillator and I/O pins [cite: 255]
+void pinConfig(void)  {
+    OSCCON = 0x6A; /* b6..4 = 110 = 4MHz */ // Set internal oscillator frequency [cite: 256, 1179] (Note: 0x6A -> IRCF=1101 -> 4MHz)
+    TXCKSEL = 1; // Remap EUSART TX to RC4 for PIC16F1829 (APFCON0 bit 2)
+    RXDTSEL = 1; // Remap EUSART RX to RC5 for PIC16F1829 (APFCON0 bit 7)
+
+    // Configure PORTA
+    TRISA = 0x10; // RA4 input, RA3 input only, RA5, RA2, RA1, RA0 outputs [cite: 259] (RA5, RA2 for LEDs)
+    ANSELA = 0x10; // RA4 analog, others digital [cite: 259]
+
+    // Configure PORTC
+    TRISC = 0x0C; /* set RC3, RC2 as input */ // RC5(RX), RC4(TX) setup by EUSART & APFCON [cite: 259, 46, 258]
+    ANSELC = 0x0C; /* RC3, RC2 are analog */ // For sensors in Part B [cite: 260, 92]
+
+    // Configure PORTB
+    TRISB = 0xF0; // RB7-RB4 inputs, RB3-RB0 outputs [cite: 260] (RB5 for Pot)
+    ANSELB = 0xF0; // RB7-RB4 analog, RB3-RB0 digital [cite: 260] (RB5 for Pot)
+
+    INTCON = 0; // Disable all interrupts [cite: 261]
+}
+
+// Function to toggle RA5 LED for debugging [cite: 261]
+void RA5Blink(void)  {
+    RA5 ^= 0x01; // Toggles the LED [cite: 262]
+    __delay_ms(200); // Delay for visibility [cite: 262]
+}
+
+
+
