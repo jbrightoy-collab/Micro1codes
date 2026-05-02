@@ -1,0 +1,120 @@
+//I2C LCD
+//DVD
+#include <xc.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "i2c.h"         // Include I2C library
+#include "i2c_LCD.h"     // Include LCD specific I2C library
+
+// PIC16F1829 Configuration Bit Settings
+// 'C' source line config statements
+
+// Use project enums instead of #define for ON and OFF.
+// CONFIG1
+#pragma config FOSC = INTOSC    // Oscillator Selection (INTOSC oscillator: I/O function on CLKIN pin)
+#pragma config WDTE = OFF       // Watchdog Timer Enable (WDT disabled)
+#pragma config PWRTE = OFF      // Power-up Timer Enable (PWRT disabled)
+#pragma config MCLRE = ON       // MCLR Pin Function Select (MCLR/VPP pin function is MCLR)
+#pragma config CP = OFF         // Flash Program Memory Code Protection (Program memory code protection is disabled)
+#pragma config CPD = OFF        // Data Memory Code Protection (Data memory code protection is disabled)
+#pragma config BOREN = ON       // Brown-out Reset Enable (Brown-out Reset enabled)
+#pragma config CLKOUTEN = OFF   // Clock Out Enable (CLKOUT function is disabled. I/O or oscillator function on the CLKOUT pin)
+#pragma config IESO = OFF       // Internal/External Switchover (Internal/External Switchover mode is disabled)
+#pragma config FCMEN = OFF      // Fail-Safe Clock Monitor Enable (Fail-Safe Clock Monitor is disabled)
+
+// CONFIG2
+#pragma config WRT = OFF        // Flash Memory Self-Write Protection (Write protection off)
+#pragma config PLLEN = OFF      // PLL Enable (4x PLL disabled)
+#pragma config STVREN = ON      // Stack Overflow/Underflow Reset Enable (Stack Overflow or Underflow will cause a Reset)
+#pragma config BORV = LO        // Brown-out Reset Voltage Selection (Brown-out Reset Voltage (Vbor), low trip point selected.)
+#pragma config LVP = ON         // Low-Voltage Programming Enable (High-voltage on MCLR/VPP must be used for programming)
+
+
+#define I2C_SLAVE 0x27	        /* was 1E Channel of i2c slave depends on soldering on back of board*/
+#define _XTAL_FREQ 4000000.0    /*for 4mhz*/
+
+//Prototypes
+void I2C_LCD_Command(unsigned char,unsigned char);    // Function to send commands to LCD
+void I2C_LCD_SWrite(unsigned char,unsigned char *, char); // Function to write string to LCD
+void I2C_LCD_Init(unsigned char);                     // Function to initialize LCD
+void I2C_LCD_Pos(unsigned char,unsigned char);        // Function to set LCD cursor position
+unsigned char I2C_LCD_Busy(unsigned char);            // Function to check if LCD is busy
+
+void main(void) { // Removed citation here
+
+    //Variables
+	unsigned char  Sout[16]; // Buffer to hold string data for LCD
+	unsigned char * Sptr;    // Pointer for the buffer
+	Sptr = Sout;             // Set pointer equal to the Array start address // Removed citation here
+    //Now when you pass the pointer in the function call you can use either one
+	int z, num;             // Integer variables for general use
+    int a, b, sum;        // Variables for Challenge Part B
+
+	//Clock and Pin Configs
+	OSCCON  = 0x68; /* b6..4 = 1101 = 4MHz */ // Removed citation here
+
+	/* ********************************I2C**************************** */
+	/* Note the I2C write to LCD uses the 8 bits of the PCF8574 chip to control the LCD  */
+	/* Connected High 4 bits are High 4 data for LCD (use in 4 bit mode)  the other 4 are     */
+	/* bit3=turn on /off bk light  bit 2= E line writes on Hi 2 Lo transition, reads Lo to Hi */
+	/* bit 2=Read write set  to 0 for write   bit 0=RS command=0 Data=1      */
+	/* ********************************I2C**************************** */
+
+
+	i2c_Init();             // Initialize I2C communication
+	// Start I2C as Master 100KHz
+	I2C_LCD_Init(I2C_SLAVE); // Initialize the LCD via I2C
+
+	//First Words: Let's say Hello
+    // (This section can be filled as per page 7 of the lab doc if needed)
+
+
+	//Let's count our ABC's and ASCII's
+    // (This section can be filled as per page 7 of the lab doc if needed, but commented out for challenge)
+
+
+    //Challenge part 1
+    I2C_LCD_Command(I2C_SLAVE, 0x01); // Clear display
+    __delay_ms(2); // Short delay after clearing (clear command takes longer)
+    sprintf(Sout, "Hello User");      // Load the string into Sout buffer
+    // "Hello User" is 10 characters long
+    I2C_LCD_SWrite(I2C_SLAVE, Sout, 10); // Write the string to the LCD
+    __delay_ms(2000); // Delay to show the message
+
+
+    //Challenge part 2
+    a = 100; // Initialize int a
+    b = 50;  // Initialize int b
+    sum = a + b; // Calculate sum
+    I2C_LCD_Command(I2C_SLAVE, 0x01); // Clear display
+    __delay_ms(2); // Short delay after clearing
+    // Format the string with variables, using %d specifier for integers
+    sprintf(Sout, "%d + %d = %d", a, b, sum);
+    // String "100 + 50 = 150" is 13 characters
+    I2C_LCD_SWrite(I2C_SLAVE, Sout, 13); // Write the result to the LCD
+    __delay_ms(2000); // Delay to show the message
+
+
+    //Challenge part 3
+    // Copied and uncommented from bottom of file
+	I2C_LCD_Command(I2C_SLAVE, 0x01); //Clear display
+	I2C_LCD_Pos(I2C_SLAVE,0x00);      // Set position to start of top line
+	sprintf(Sout, "Hi Brandon");      // Format string
+	I2C_LCD_SWrite(I2C_SLAVE, Sout, 10); // Write string (10 chars)
+	I2C_LCD_Pos(I2C_SLAVE,0x40);      // Set position to start of bottom line
+	sprintf(Sout, "Hi DV");           // Format string
+	I2C_LCD_SWrite(I2C_SLAVE, Sout, 5); // Write string (5 chars)
+	while(1) { // Infinite loop for animation
+
+		for(int i = 0; i < 15; i ++){ // Loop 15 times
+			I2C_LCD_Command(I2C_SLAVE, 0x1C); // Shift display right command
+			__delay_ms(200);                  // Delay 200ms
+		} //
+
+		for(int i = 0; i < 15; i ++){ // Loop 15 times
+			I2C_LCD_Command(I2C_SLAVE, 0x18); // Shift display left command
+			__delay_ms(200);                  // Delay 200ms
+		} //
+    } //
+}
